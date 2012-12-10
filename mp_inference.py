@@ -1,4 +1,11 @@
 #!/usr/bin/python
+#
+# Multipool: Efficient multi-locus genetic mapping with pooled sequencing
+# 
+# Matt Edwards
+# Copyright 2012 MIT
+# Released under the MIT license
+#
 
 import argparse, collections, sys, logging
 import numpy, scipy.stats
@@ -396,4 +403,3 @@ if __name__ == "__main__":
 
     if not args.noPlot:
         doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right)
-
