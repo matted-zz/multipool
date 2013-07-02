@@ -229,7 +229,7 @@ def parseArgs():
     parser.add_argument("-r", "--resolution", type=float, default=100, help="Bin size for discrete model.  Default: 100 bp", dest="res")
     parser.add_argument("-c", "--centimorgan", type=float, default=3300, help="Length of a centimorgan, in base pairs.  Default: 3300 (yeast average)", dest="cM")
     parser.add_argument("-t", "--truncate", type=bool, default=True, help="Truncate possibly fixated (erroneous) markers.  Default: true", dest="filter")
-    parser.add_argument("-np", "--noPlot", action="store_true", default=False, help="Turn off plotting output..  Default: false", dest="noPlot")
+    parser.add_argument("-np", "--noPlot", action="store_true", default=False, help="Turn off plotting output.  Default: false", dest="noPlot")
 
     parser.add_argument("-o", "--output", type=argparse.FileType("w"), default=None, help="Output file for bin-level statistics", dest="outFile")
 
