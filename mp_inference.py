@@ -10,7 +10,7 @@
 import argparse, collections, sys, logging
 import numpy, scipy.stats
 
-VERSION = "0.10"
+VERSION = "0.10.1"
 
 def load_table(fin, binsize, verbose, filt):
     temp = collections.defaultdict(lambda : numpy.zeros(2))
@@ -217,8 +217,11 @@ def doLoading(fins, filt):
 
     return y, y_var, y2, y_var2, d, d2, T
 
-def doOutput():
-    pass
+def doOutput(fout, T, res, LOD, mu_MLE, N):
+    print >>fout, "Bin start (bp)\tMLE allele freq.\tLOD score"
+    for i in xrange(T):
+        print >>fout, "%d\t%.4f\t%.2f" % (i*res, 1.0*mu_MLE[i]/N, LOD[i])
+    fout.flush()
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Multipool: Efficient multi-locus genetic mapping with pooled sequencing, version %s.  See http://cgs.csail.mit.edu/multipool/ for more details." % VERSION)
@@ -399,7 +402,7 @@ if __name__ == "__main__":
 
     # Do something with the results.
     if args.outFile is not None:
-        doOutput(args.outFile)
+        doOutput(args.outFile, T, res, LOD, mu_MLE, N)
 
     if not args.noPlot:
         doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right)
