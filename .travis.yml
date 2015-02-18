@@ -27,6 +27,8 @@ install:
   - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy
   - python setup.py install
 
+# See: https://github.com/coagulant/coveralls-python.  When I have tests, this should be "script".
+# nosetests --with-coverage --cover-package=multipool --logging-level=INFO
 before_script:
   - pip install coveralls
   - coverage run --source=multipool setup.py test
