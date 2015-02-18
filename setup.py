@@ -9,7 +9,7 @@ setup(name="multipool",
       license="MIT",
       url="https://github.com/matted/multipool",
       packages=[],
-      scripts=["mp_inference.y"],
+      scripts=["mp_inference.py"],
       zip_safe=True,
       install_requires=["scipy", "numpy"], # pylab is optional; leaving it out for now
   )
