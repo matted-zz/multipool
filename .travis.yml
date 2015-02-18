@@ -30,3 +30,6 @@ install:
 script: python mp_inference.py poolK1_chr12.txt -n 100 -np
 
 sudo: false
+
+after_success:
+  - coveralls
