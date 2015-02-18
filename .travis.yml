@@ -3,7 +3,6 @@ language: python
 install:
   - pip install .
 
-script: ./mp_inference.py --help
+script: ./mp_inference.py poolK1_chr12.txt -n 100 -np
 
 sudo: false
-
