@@ -4,3 +4,6 @@ install:
   - pip install .
 
 script: ./mp_inference.py --help
+
+sudo: false
+
