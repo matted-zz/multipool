@@ -27,6 +27,10 @@ install:
   - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy
   - python setup.py install
 
+before_script:
+  - pip install coveralls
+  - coverage run --source=census setup.py test
+
 script: python mp_inference.py poolK1_chr12.txt -n 100 -np
 
 sudo: false
