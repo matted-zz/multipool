@@ -23,7 +23,8 @@ before_install:
 
 # Install packages
 install:
-  - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy argparse
+  - if [[ $TRAVIS_PYTHON_VERSION == 2.6 ]]; then conda install --yes python=$TRAVIS_PYTHON_VERSION argparse; fi
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy
   - python setup.py install
 
 script: python mp_inference.py poolK1_chr12.txt -n 100 -np
