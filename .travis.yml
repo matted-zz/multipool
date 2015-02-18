@@ -20,7 +20,7 @@ before_install:
 
 # Install packages
 install:
-  - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy
+  - conda install --yes atlas numpy scipy # python=$TRAVIS_PYTHON_VERSION 
   - python setup.py install
 
 script: python mp_inference.py poolK1_chr12.txt -n 100 -np
