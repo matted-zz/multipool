@@ -6,6 +6,8 @@ Multipool 0.10.1
 See the [wiki page](https://github.com/matted/multipool/wiki) for more
 details, including usage examples and installation instructions.
 
+Usage and options:
+====
 
     usage: mp_inference.py [-h] -n N [-m {replicates,contrast}] [-r RES] [-c CM]
                            [-t FILTER] [-np] [-o OUTFILE] [-v]
@@ -38,6 +40,7 @@ details, including usage examples and installation instructions.
     
 
 Count file format: 
+====
 
 A whitespace delimited file with a row for each marker (SNP or small
 indel).  The first column reports the locus position in base pairs
