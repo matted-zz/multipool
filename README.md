@@ -1,4 +1,4 @@
-Multipool 0.10.1
+Multipool 0.10.2
 ==============
 
 [![Build Status](https://travis-ci.org/matted/multipool.svg)](https://travis-ci.org/matted/multipool) [![Coverage Status](https://coveralls.io/repos/matted/multipool/badge.svg)](https://coveralls.io/r/matted/multipool)
@@ -13,7 +13,7 @@ details, including usage examples and installation instructions.
                            countfile [countfile ...]
         
     Multipool: Efficient multi-locus genetic mapping with pooled sequencing,
-    version 0.10. See http://cgs.csail.mit.edu/multipool/ for more details.
+    version 0.10.2. See http://cgs.csail.mit.edu/multipool/ for more details.
     
     positional arguments:
       countfile             Input file[s] of allele counts
