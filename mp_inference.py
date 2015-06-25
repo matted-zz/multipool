@@ -195,7 +195,7 @@ def doLoading(fins, filt):
     if y2 is None:
         T = len(y) # Observations (max time index)
     else:
-        T = min([len(temp) for temp in y2])
+        T = min([len(temp) for temp in [y] + y2])
         y = y[:T]
         y_var = y_var[:T]
         d = d[:T]
