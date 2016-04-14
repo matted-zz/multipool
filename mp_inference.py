@@ -232,7 +232,10 @@ def parseArgs():
     parser.add_argument("-r", "--resolution", type=float, default=100, help="Bin size for discrete model.  Default: 100 bp", dest="res")
     parser.add_argument("-c", "--centimorgan", type=float, default=3300, help="Length of a centimorgan, in base pairs.  Default: 3300 (yeast average)", dest="cM")
     parser.add_argument("-t", "--truncate", type=bool, default=True, help="Truncate possibly fixated (erroneous) markers.  Default: true", dest="filter")
-    parser.add_argument("-np", "--noPlot", action="store_true", default=False, help="Turn off plotting output.  Default: false", dest="noPlot")
+    
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-np", "--noPlot", action="store_true", default=False, help="Turn off plotting output.  Default: false", dest="noPlot")
+    group.add_argument("--plotFile", help="Write plotting output to file.")
 
     parser.add_argument("-o", "--output", type=argparse.FileType("w"), default=None, help="Output file for bin-level statistics", dest="outFile")
 
@@ -240,7 +243,7 @@ def parseArgs():
 
     return parser.parse_args()
 
-def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right):
+def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right, plotFile):
     import pylab
     X = numpy.arange(0, T*res, res)
 
@@ -289,7 +292,12 @@ def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, le
             posteriors[:,c] /= numpy.sum(posteriors[:,c])
 
     pylab.axis([0,T*res,LOD.min(),LOD.max()+3])
-    pylab.show()
+    
+    if plotFile is not None:
+        pylab.savefig(plotFile)
+    else:
+        pylab.show()
+    
 
 def doComputation(y, y_var, y2, y_var2, d, d2, T):
     mu_pstr, V_pstr, logLik = kalman(y, y_var, d, T, N, p)
@@ -389,6 +397,7 @@ if __name__ == "__main__":
     N = args.N
     res = args.res
     p = res/100.0/args.cM
+    plotFile = args.plotFile
 
     REPLICATES = (args.mode == "replicates")
 
@@ -405,4 +414,4 @@ if __name__ == "__main__":
         doOutput(args.outFile, T, res, LOD, mu_MLE, N)
 
     if not args.noPlot:
-        doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right)
+        doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right, plotFile)
