@@ -14,11 +14,12 @@ VERSION = "0.10.2"
 
 def load_table(fin, binsize, verbose, filt):
     temp = collections.defaultdict(lambda : numpy.zeros(2))
+    binsize = int(binsize)
     for line in fin:
         if line.startswith("#"): continue
         line = line.strip().split()
-        line = map(float, line[:3])
-        a, b = line[1:3]
+        pos = int(line[0])
+        a, b = map(float, line[1:3])
         if filt and (a <= 0 or b <= 0): # We might miss really
                                         # informative SNPs, but we're
                                         # probably just missing
@@ -26,8 +27,15 @@ def load_table(fin, binsize, verbose, filt):
                                         # them
             if verbose and a+b>0: print >>sys.stderr, "Skipping", line
             continue
-        temp[line[0] / binsize] += (a,b)
+        bin_start = pos - (pos % binsize)
+        temp[bin_start] += (a,b)
     fin.close()
+
+    # Set bins from range of bin keys.
+    bins = numpy.array(temp.keys())
+    first_bin = numpy.amin(bins)
+    last_bin = numpy.amax(bins)
+    bins = numpy.arange(first_bin, last_bin + 1, binsize)
 
     if filt:
         # Filter highly-outlying counts.  Preprocessing should take
@@ -43,17 +51,21 @@ def load_table(fin, binsize, verbose, filt):
                 print >>sys.stderr, "Filtering allele counts:", v
                 temp[k] = v-v
 
-    means = numpy.zeros(max(temp.keys())+1)
-    counts = numpy.zeros(max(temp.keys())+1)
-    variances = numpy.zeros(max(temp.keys())+1) + float("inf")
-    for loc, (a,b) in temp.iteritems():
-        p = 1.0*a/(a+b+1e-6)
-        means[loc] = a
-        counts[loc] = a+b
-        if a+b > 0:
-            variances[loc] = p*(1.0-p) * (a+b)
+    means = numpy.zeros(len(bins))
+    counts = numpy.zeros(len(bins))
+    variances = numpy.full(len(bins), numpy.inf)
+    for i, bin in enumerate(bins):
+        try:
+            (a,b) = temp[bin]
+            p = 1.0*a/(a+b+1e-6)
+            means[i] = a
+            counts[i] = a+b
+            if a+b > 0:
+                variances[i] = p*(1.0-p) * (a+b)
+        except KeyError: # empty bin
+            pass
 
-    return means, variances, counts
+    return means, variances, counts, bins
 
 # Return the log of the pdf of the normal distribution parametrized by
 # mu and sigma.
@@ -176,17 +188,43 @@ def calcLODs_multicoupled(mu_pstr_vec, V_pstr_vec, T, N):
     return LOD, mu_MLE
 
 def doLoading(fins, filt):
-    y,y_var,d = load_table(fins[0], res, False, filt)
+    y,y_var,d, bins = load_table(fins[0], res, False, filt)
     d2 = None
     y_var2 = None
 
     if len(fins) > 1:
-        y2, y_var2, d2 = [], [], []
+        y2, y_var2, d2, bins2 = [], [], [], []
         for fin in fins[1:]:
-            temp1, temp2, temp3 = load_table(fin, res, False, filt)
+            temp1, temp2, temp3, temp4 = load_table(fin, res, False, filt)
             y2.append(temp1)
             y_var2.append(temp2)
             d2.append(temp3)
+            bins2.append(temp4)
+
+        # Get first and last bin start position for each input table.
+        first_bins = [ b[0] for b in [bins] + bins2 ]
+        last_bins = [ b[-1] for b in [bins] + bins2 ]
+
+        # If bin start positions don't match across input tables, get global
+        # minimum and maximum, then pad each dataset to fit global range.
+        if len(set(first_bins)) > 1 or len(set(last_bins)) > 1:
+
+            binsize = int(res)
+            min_first_bin, max_last_bin = min(first_bins), max(last_bins)
+            bins = numpy.arange(min_first_bin, max_last_bin + 1, binsize)
+            lpads = [ (b - min_first_bin) / binsize for b in first_bins ]
+            rpads = [ (max_last_bin - b) / binsize for b in last_bins ]
+
+            pad_widths = lpads[0], rpads[0]
+            y = numpy.pad(y, pad_widths, 'constant', constant_values=0)
+            y_var = numpy.pad(y_var, pad_widths, 'constant', constant_values=numpy.inf)
+            d = numpy.pad(d, pad_widths, 'constant', constant_values=0)
+
+            for i in xrange(len(y2)):
+                pad_widths = lpads[i+1], rpads[i+1]
+                y2[i] = numpy.pad(y2[i], pad_widths, 'constant', constant_values=0)
+                y_var2[i] = numpy.pad(y_var2[i], pad_widths, 'constant', constant_values=numpy.inf)
+                d2[i] = numpy.pad(d2[i], pad_widths, 'constant', constant_values=0)
     else:
         y2 = None
 
@@ -215,12 +253,12 @@ def doLoading(fins, filt):
         for i in xrange(len(d2)):
             d2[i][start:stop] = 0
 
-    return y, y_var, y2, y_var2, d, d2, T
+    return y, y_var, y2, y_var2, d, d2, T, bins
 
-def doOutput(fout, T, res, LOD, mu_MLE, N):
+def doOutput(fout, T, res, LOD, mu_MLE, N, bins):
     print >>fout, "Bin start (bp)\tMLE allele freq.\tLOD score"
     for i in xrange(T):
-        print >>fout, "%d\t%.4f\t%.2f" % (i*res, 1.0*mu_MLE[i]/N, LOD[i])
+        print >>fout, "%d\t%.4f\t%.2f" % (bins[i], 1.0*mu_MLE[i]/N, LOD[i])
     fout.flush()
 
 def parseArgs():
@@ -243,9 +281,10 @@ def parseArgs():
 
     return parser.parse_args()
 
-def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right, plotFile):
+def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2,
+    left, right, bins, plotFile=None):
     import pylab
-    X = numpy.arange(0, T*res, res)
+    X = bins
 
     if y2 is not None:
         old = numpy.seterr(all="ignore")
@@ -279,7 +318,7 @@ def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, le
     targStop = right*res
     pylab.fill_between([targStart-res/2,targStop-res/2], 0, 1, color="k", alpha=0.2)
 
-    pylab.axis([0,T*res,0,1])
+    pylab.axis([X[0],X[-1],0,1])
 
     pylab.twinx()
     pylab.ylabel("LOD score")
@@ -291,7 +330,7 @@ def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, le
             posteriors[:,c] = scipy.stats.norm.pdf(numpy.arange(0,1.0,1.0/N), mu_pstr[c]/N, numpy.sqrt(V_pstr[c])/N)
             posteriors[:,c] /= numpy.sum(posteriors[:,c])
 
-    pylab.axis([0,T*res,LOD.min(),LOD.max()+3])
+    pylab.axis([X[0],X[-1],LOD.min(),LOD.max()+3])
     
     if plotFile is not None:
         pylab.savefig(plotFile)
@@ -404,14 +443,15 @@ if __name__ == "__main__":
     print >>sys.stderr, "Recombination fraction:", p, "in cM:", 1.0*res/p/100.0
 
     # Data loading and preprocessing.
-    y, y_var, y2, y_var2, d, d2, T = doLoading(args.fins, args.filter)
+    y, y_var, y2, y_var2, d, d2, T, bins = doLoading(args.fins, args.filter)
 
     # Main computation.
     LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right = doComputation(y, y_var, y2, y_var2, d, d2, T)
 
     # Do something with the results.
     if args.outFile is not None:
-        doOutput(args.outFile, T, res, LOD, mu_MLE, N)
+        doOutput(args.outFile, T, res, LOD, mu_MLE, N, bins)
 
     if not args.noPlot:
-        doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right, plotFile)
+        doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2,
+            left, right, bins, plotFile=plotFile)
