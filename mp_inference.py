@@ -31,11 +31,12 @@ def load_table(fin, binsize, verbose, filt):
         temp[bin_start] += (a,b)
     fin.close()
 
-    # Set bins from range of bin keys.
-    bins = numpy.array(temp.keys())
-    first_bin = numpy.amin(bins)
-    last_bin = numpy.amax(bins)
-    bins = numpy.arange(first_bin, last_bin + 1, binsize)
+    # Set bin edges from range of bin keys.
+    bin_starts = numpy.array(temp.keys())
+    first_bin_edge = numpy.amin(bin_starts)
+    last_bin_edge = numpy.amax(bin_starts) + binsize
+    bins = numpy.arange(first_bin_edge, last_bin_edge + 1, binsize) # include last bin edge
+    bin_starts = bins[:-1]
 
     if filt:
         # Filter highly-outlying counts.  Preprocessing should take
@@ -51,12 +52,12 @@ def load_table(fin, binsize, verbose, filt):
                 print >>sys.stderr, "Filtering allele counts:", v
                 temp[k] = v-v
 
-    means = numpy.zeros(len(bins))
-    counts = numpy.zeros(len(bins))
-    variances = numpy.full(len(bins), numpy.inf)
-    for i, bin in enumerate(bins):
+    means = numpy.zeros(len(bin_starts))
+    counts = numpy.zeros(len(bin_starts))
+    variances = numpy.full(len(bin_starts), numpy.inf)
+    for i, bin_start in enumerate(bin_starts):
         try:
-            (a,b) = temp[bin]
+            (a,b) = temp[bin_start]
             p = 1.0*a/(a+b+1e-6)
             means[i] = a
             counts[i] = a+b
@@ -202,18 +203,20 @@ def doLoading(fins, filt):
             bins2.append(temp4)
 
         # Get first and last bin start position for each input table.
-        first_bins = [ b[0] for b in [bins] + bins2 ]
-        last_bins = [ b[-1] for b in [bins] + bins2 ]
+        first_bin_starts = [ b[0] for b in [bins] + bins2 ]
+        last_bin_starts = [ b[-2] for b in [bins] + bins2 ]
 
         # If bin start positions don't match across input tables, get global
         # minimum and maximum, then pad each dataset to fit global range.
-        if len(set(first_bins)) > 1 or len(set(last_bins)) > 1:
+        if len(set(first_bin_starts)) > 1 or len(set(last_bin_starts)) > 1:
 
             binsize = int(res)
-            min_first_bin, max_last_bin = min(first_bins), max(last_bins)
-            bins = numpy.arange(min_first_bin, max_last_bin + 1, binsize)
-            lpads = [ (b - min_first_bin) / binsize for b in first_bins ]
-            rpads = [ (max_last_bin - b) / binsize for b in last_bins ]
+            min_first_bin_start = min(first_bin_starts)
+            max_last_bin_start = max(last_bin_starts)
+            max_last_bin_edge = max_last_bin_start + binsize
+            bins = numpy.arange(min_first_bin_start, max_last_bin_edge + 1, binsize)
+            lpads = [ (b - min_first_bin_start) / binsize for b in first_bin_starts ]
+            rpads = [ (max_last_bin_start - b) / binsize for b in last_bin_starts ]
 
             pad_widths = lpads[0], rpads[0]
             y = numpy.pad(y, pad_widths, 'constant', constant_values=0)
@@ -256,9 +259,10 @@ def doLoading(fins, filt):
     return y, y_var, y2, y_var2, d, d2, T, bins
 
 def doOutput(fout, T, res, LOD, mu_MLE, N, bins):
+    bin_starts = bins[:-1]
     print >>fout, "Bin start (bp)\tMLE allele freq.\tLOD score"
     for i in xrange(T):
-        print >>fout, "%d\t%.4f\t%.2f" % (bins[i], 1.0*mu_MLE[i]/N, LOD[i])
+        print >>fout, "%d\t%.4f\t%.2f" % (bin_starts[i], 1.0*mu_MLE[i]/N, LOD[i])
     fout.flush()
 
 def parseArgs():
@@ -284,7 +288,7 @@ def parseArgs():
 def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2,
     left, right, bins, plotFile=None):
     import pylab
-    X = bins
+    X = bins[:-1] + 0.5*res # bin mid-points
 
     if y2 is not None:
         old = numpy.seterr(all="ignore")
@@ -314,11 +318,9 @@ def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2,
 
     pylab.axhline(0.5, color='k', ls=':')
               
-    targStart = left*res
-    targStop = right*res
-    pylab.fill_between([targStart-res/2,targStop-res/2], 0, 1, color="k", alpha=0.2)
+    pylab.fill_between([bins[left], bins[right]], 0, 1, color="k", alpha=0.2)
 
-    pylab.axis([X[0],X[-1],0,1])
+    pylab.axis([bins[0],bins[-1],0,1])
 
     pylab.twinx()
     pylab.ylabel("LOD score")
@@ -330,7 +332,7 @@ def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2,
             posteriors[:,c] = scipy.stats.norm.pdf(numpy.arange(0,1.0,1.0/N), mu_pstr[c]/N, numpy.sqrt(V_pstr[c])/N)
             posteriors[:,c] /= numpy.sum(posteriors[:,c])
 
-    pylab.axis([X[0],X[-1],LOD.min(),LOD.max()+3])
+    pylab.axis([bins[0],bins[-1],LOD.min(),LOD.max()+3])
     
     if plotFile is not None:
         pylab.savefig(plotFile)
@@ -338,7 +340,7 @@ def doPlotting(y, y2, d, d2, LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2,
         pylab.show()
     
 
-def doComputation(y, y_var, y2, y_var2, d, d2, T):
+def doComputation(y, y_var, y2, y_var2, d, d2, T, bins):
     mu_pstr, V_pstr, logLik = kalman(y, y_var, d, T, N, p)
 
     LOD, mu_MLE = calcLODs_multicoupled([mu_pstr], [V_pstr], T, N)
@@ -382,7 +384,7 @@ def doComputation(y, y_var, y2, y_var2, d, d2, T):
         else:
             break
 
-    print >>sys.stderr, "50% credible interval spans", left*res, right*res, "length is:", (right-left)*res
+    print >>sys.stderr, "50% credible interval spans", bins[left], bins[right], "length is:", (bins[right] - bins[left])
 
     cumul, mean = 0.0, 0.0
     left, right = None, None
@@ -392,31 +394,33 @@ def doComputation(y, y_var, y2, y_var2, d, d2, T):
             left = i-1
         if cumul >= 0.95 and right is None:
             right = i
-        mean += val*i*res
-    if left is None: left = 0
+        mean += val*bins[i]
+    if left is None or left < 0: left = 0 # bound at zero
     if right is None: right = T
 
-    print >>sys.stderr, "90% credible interval spans", left*res, right*res, "length is:", (right-left)*res, "mean:", mean, "mode:", temp.argmax()*res
+    print >>sys.stderr, "90% credible interval spans", bins[left], bins[right], "length is:", (bins[right] - bins[left]), "mean:", mean, "mode:", bins[temp.argmax()]
     left90 = left
     right90 = right
 
     maxLOD = LOD.max()
     maxIndex = LOD.argmax()
-    print >>sys.stderr, "Max multi-locus LOD score at:", maxLOD, maxIndex*res
+    print >>sys.stderr, "Max multi-locus LOD score at:", maxLOD, bins[maxIndex]
     index = maxIndex
-    while index >= 0 and LOD[index] > maxLOD-1.0:
+    while index > 0 and LOD[index] > maxLOD-1.0:
         index -= 1
     left = index
-    print >>sys.stderr, "1-LOD interval from ", index*res,
+    print >>sys.stderr, "1-LOD interval from ", bins[index],
     index = maxIndex
     while index < T and LOD[index] > maxLOD-1.0:
         index += 1
-    print >>sys.stderr, "to", index*res, "length is:", (index-left)*res
+    print >>sys.stderr, "to", bins[index], "length is:", (bins[index] - bins[left])
 
     D = 30 # Assume that contributions to the location are effectively
            # zero when you go this many bins away.
     try:
-        print >>sys.stderr, "Sublocalized best location:", numpy.sum(numpy.arange(res*(maxIndex-D),res*(maxIndex+D+1),res)*numpy.exp(LOD[maxIndex-D:maxIndex+D+1])) / numpy.sum(numpy.exp(LOD[maxIndex-D:maxIndex+D+1]))
+        i = max(maxIndex - D, 0) # bound at zero
+        j = min(maxIndex + D + 1, T) # bound at T
+        print >>sys.stderr, "Sublocalized best location:", numpy.sum(bins[i:j]*numpy.exp(LOD[i:j])) / numpy.sum(numpy.exp(LOD[i:j]))
     except ValueError:
         pass
 
@@ -446,7 +450,7 @@ if __name__ == "__main__":
     y, y_var, y2, y_var2, d, d2, T, bins = doLoading(args.fins, args.filter)
 
     # Main computation.
-    LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right = doComputation(y, y_var, y2, y_var2, d, d2, T)
+    LOD, mu_MLE, mu_pstr, mu_pstr2, V_pstr, V_pstr2, left, right = doComputation(y, y_var, y2, y_var2, d, d2, T, bins)
 
     # Do something with the results.
     if args.outFile is not None:
